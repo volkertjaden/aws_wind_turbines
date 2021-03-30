@@ -50,7 +50,7 @@ if reset_all:
   dbutils.fs.rm(path+"/turbine/bronze/", True)
   dbutils.fs.rm(path+"/turbine/silver/", True)
   dbutils.fs.rm(path+"/turbine/gold/", True)
-  dbutils.fs.rm(path+"/turbine/kinesis_sample/")
+  dbutils.fs.rm(path+"/turbine/kinesis_sample/",True)
     
   spark.read.format("json") \
             .schema("turbine_id bigint, date timestamp, power float, wind_speed float, theoretical_power_curve float, wind_direction float") \

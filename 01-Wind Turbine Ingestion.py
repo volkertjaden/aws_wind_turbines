@@ -26,7 +26,7 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text('reset_all_data',"True")
+dbutils.widgets.text('reset_all_data',"true")
 dbutils.widgets.text('path',"/home/volker.tjaden@databricks.com/turbine/")
 
 # COMMAND ----------
