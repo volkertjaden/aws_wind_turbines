@@ -238,8 +238,7 @@ region = 'us-west-2'
 app_name = "windturbine"
 model_uri = 'models:/turbine_gbt/production'
 
-mfs.deploy(app_name=app_name, model_uri=model_uri, region_name=region, mode="create", image_url="997819012307.dkr.ecr.us-west-2.amazonaws.com/aws-devdays:1.11.0",synchronous=False, archive=True)
-
+mfs.deploy(app_name=app_name, model_uri=model_uri, region_name=region, mode="create", image_url="997819012307.dkr.ecr.us-west-2.amazonaws.com/windturbine:1.14.0",synchronous=False, archive=True)
 
 # COMMAND ----------
 
@@ -263,7 +262,6 @@ payload = list(dataset.select(*featureCols).sample(fraction=0.01).limit(1).colle
 # COMMAND ----------
 
 # DBTITLE 1,Now, let us test our deployed endpoint
-
 import json
 import boto3
 
