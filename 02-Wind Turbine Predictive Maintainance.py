@@ -85,29 +85,11 @@ display(turbine_damaged)
 # COMMAND ----------
 
 # DBTITLE 1,Build Training and Test dataset
-# MAGIC %md
-# MAGIC from sklearn.model_selection import train_test_split
-# MAGIC from sklearn.preprocessing import LabelEncoder
-# MAGIC 
-# MAGIC def prepare_data(products):
-# MAGIC   le = LabelEncoder()
-# MAGIC   le.fit(products["STATUS"])
-# MAGIC   X_train, X_test, y_train, y_test = train_test_split(products["AN3", "AN4", "AN5", "AN6", "AN7", "AN8", "AN9", "AN10"], le.transform(products["STATUS"]), test_size=0.33, random_state=42)
-# MAGIC   return X_train, X_test, y_train, y_test, le
-# MAGIC 
-# MAGIC X_train, X_test, y_train, y_test, le = prepare_data(dataset.limit(1000000).toPandas())
-
-# COMMAND ----------
-
 train, test = dataset.randomSplit([0.7, 0.3],42)
 
 # COMMAND ----------
 
 print(train.count(),test.count())
-
-# COMMAND ----------
-
-display(train)
 
 # COMMAND ----------
 
@@ -238,7 +220,7 @@ region = 'us-west-2'
 app_name = "windturbine"
 model_uri = 'models:/turbine_gbt/production'
 
-mfs.deploy(app_name=app_name, model_uri=model_uri, region_name=region, mode="create", image_url="997819012307.dkr.ecr.us-west-2.amazonaws.com/windturbine:1.14.0",synchronous=False, archive=True)
+mfs.deploy(app_name=app_name, model_uri=model_uri, region_name=region, mode="create", image_url="997819012307.dkr.ecr.us-west-2.amazonaws.com/aws-devdays:1.11.0",synchronous=False, archive=True)
 
 # COMMAND ----------
 
@@ -279,10 +261,11 @@ def query_endpoint_example(app_name, input_json):
   print("Received response: {}".format(preds))
   return preds
 
-input = input = {'columns' : cols,
-        'data' : payload}
+input = {'columns' : cols,
+        'data' : [payload]}
 
 input_json = json.dumps(input)
+
 
 prediction1 = query_endpoint_example(app_name=app_name, input_json=input_json)
 

@@ -175,12 +175,12 @@ turbine_stream.join(status_df, ['id'], 'left') \
 
 # MAGIC %md 
 # MAGIC ## Run DELETE/UPDATE/MERGE with DELTA ! 
-# MAGIC We just realized that something is wrong in the data before 2020! Let's DELETE all this data from our gold table as we don't want to have wrong value in our dataset
+# MAGIC We just realized that something is wrong in the data in June 2020! Let's DELETE all this data from our gold table as we don't want to have wrong value in our dataset
 
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC DELETE FROM turbine_gold where timestamp < '2020-00-01';
+# MAGIC DELETE FROM turbine_gold where timestamp < '2020-06-30' and timestamp >= '2020-06-01';
 
 # COMMAND ----------
 
