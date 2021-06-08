@@ -20,7 +20,6 @@ import matplotlib.pyplot as plt
 from time import sleep
 import re
 
-
 # COMMAND ----------
 
 current_user = dbutils.notebook.entry_point.getDbutils().notebook().getContext().tags().apply('user')
