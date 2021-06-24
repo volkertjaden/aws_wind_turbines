@@ -23,8 +23,8 @@ import re
 # COMMAND ----------
 
 current_user = dbutils.notebook.entry_point.getDbutils().notebook().getContext().tags().apply('user')
-dbName = re.sub(r'\W+', '_', current_user)
-path = "/Users/{}/demo".format(current_user)
+dbName = dbutils.widgets.get("dbName")
+path = dbutils.widgets.get("path")
 dbutils.widgets.text("path", path, "path")
 dbutils.widgets.text("dbName", dbName, "dbName")
 print("using path {}".format(path))
@@ -38,7 +38,7 @@ spark.conf.set("spark.sql.streaming.checkpointLocation", path+"/turbine/_checkpo
 # COMMAND ----------
 
 tables = ["turbine_bronze", "turbine_silver", "turbine_gold", "turbine_power"]
-reset_all = dbutils.widgets.get("reset_all") == "true" or any([not spark.catalog._jcatalog.tableExists(table) for table in ["turbine_power"]])
+reset_all = dbutils.widgets.get("reset_all") == "true" #or any([not spark.catalog._jcatalog.tableExists(table) for table in ["turbine_power"]])
 if reset_all:
   print("resetting data")
   for table in tables:

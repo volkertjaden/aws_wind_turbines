@@ -28,16 +28,17 @@
 
 dbutils.widgets.text('reset_all_data',"true")
 dbutils.widgets.text('path',"/home/volker.tjaden@databricks.com/turbine/")
+dbutils.widgets.text("dbName", "volker_windturbine")
 
 # COMMAND ----------
 
 # DBTITLE 1,Let's prepare our data first
-# MAGIC %run ./00-setup_power $reset_all=$reset_all_data
+# MAGIC %run ./00-setup_power $reset_all=$reset_all_data $dbName=dbName $path=$path
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 1/ Bronze layer: ingest raw data using the auto-loader
+# MAGIC ## 1/ Bronze layer: Ingest historical data
 
 # COMMAND ----------
 
@@ -45,11 +46,15 @@ dbutils.widgets.text('path',"/home/volker.tjaden@databricks.com/turbine/")
 
 # COMMAND ----------
 
-# DBTITLE 1,Let's explore what is being delivered by our wind turbines stream: (key, json)
+# DBTITLE 1,Let us ingest some historical raw data first: (key, json)
 # MAGIC %sql 
 # MAGIC select * from parquet.`/mnt/oetrta/volker/turbine/incoming-data/`;
-# MAGIC -- create table my_table using parquet location '/mnt/quentin-demo-resources/turbine/incoming-data';
-# MAGIC -- select * from my_table ;
+
+# COMMAND ----------
+
+# DBTITLE 1,Now, let us switch to our ingest pipeline for historical data
+# MAGIC %md
+# MAGIC ### [Delta Pipeline for batch ingest](https://e2-demo-field-eng.cloud.databricks.com/?o=1444828305810485#joblist/pipelines/4bb477c8-b16a-4c22-a571-9baebb75e8bc)
 
 # COMMAND ----------
 
@@ -70,6 +75,22 @@ bronzeDF.writeStream \
         .option("ignoreChanges", "true") \
         .trigger(processingTime='10 seconds') \
         .table("turbine_bronze")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 1/ Now setup: Pipeline for live data
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### [Notebook with definitions](https://e2-demo-field-eng.cloud.databricks.com/?o=1444828305810485#notebook/2086664449477884/command/2086664449477887)
+# MAGIC ### [Link to Pipeline](https://e2-demo-field-eng.cloud.databricks.com/?o=1444828305810485#joblist/pipelines/ced62127-a0ad-47b4-8965-31ca3d25ca47)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Some code to inspect the different parts
 
 # COMMAND ----------
 
@@ -194,12 +215,6 @@ turbine_stream.join(status_df, ['id'], 'left') \
 # MAGIC 
 # MAGIC -- Or clone the table (zero copy)
 # MAGIC -- CREATE TABLE turbine_gold_clone [SHALLOW | DEEP] CLONE turbine_gold VERSION AS OF 32
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC for s in spark.streams.active:
-# MAGIC   s.stop()
 
 # COMMAND ----------
 

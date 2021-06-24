@@ -26,7 +26,7 @@
 # COMMAND ----------
 
 # DBTITLE 1,Let's prepare our data first
-# MAGIC %run ./resources/00-setup $reset_all_data=$reset_all_data
+# MAGIC %run ./resources/00-setup $reset_all_data=false
 
 # COMMAND ----------
 
@@ -122,7 +122,7 @@ spark.readStream.table('turbine_bronze') \
 # COMMAND ----------
 
 # MAGIC %sql 
-# MAGIC create table if not exists turbine_status_gold (id int, status string) using delta;
+# MAGIC create table if not exists turbine_status_gold (id int, status string) using delta TBLPROPERTIES (delta.enableChangeDataFeed = true);
 # MAGIC 
 # MAGIC COPY INTO turbine_status_gold
 # MAGIC   FROM '/mnt/quentin-demo-resources/turbine/status'

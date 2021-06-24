@@ -3,13 +3,31 @@
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC select * from parquet.`/mnt/oetrta/volker/turbine/incoming-data/`
+dbutils.fs.rm('/home/volker.tjaden@databricks.com/turbine/turbine',True)
+
+# COMMAND ----------
+
+# MAGIC %fs ls /home/volker.tjaden@databricks.com/turbine
 
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC create database if not exists volker_dev;
+# MAGIC select count(*) from volker_windturbine.turbine_bronze_historical
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select count(*) from volker_windturbine.turbine_bronze_kinesis
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select count(*) from volker_windturbine.turbine_silver
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select count(*) from volker_windturbine.turbine_gold
 
 # COMMAND ----------
 

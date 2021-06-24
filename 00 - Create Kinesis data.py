@@ -1,5 +1,5 @@
 # Databricks notebook source
-# MAGIC %run ./00-setup_power $reset_all="False"
+# MAGIC %run ./00-setup_power $reset_all="False" $path=/home/volker.tjaden@databricks.com/turbine/ $dbName="NA"
 
 # COMMAND ----------
 
@@ -11,7 +11,7 @@ kinesis_client = boto3.client('kinesis', region_name='us-west-2')
 
 # COMMAND ----------
 
-df = spark.read.format('delta').load(path+"/turbine/kinesis_sample/")
+df = spark.read.format('delta').load(path+"kinesis_sample/")
 
 # COMMAND ----------
 
