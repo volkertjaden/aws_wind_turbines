@@ -73,7 +73,7 @@ bronzeDF = spark.readStream \
                   
 bronzeDF.writeStream \
         .option("ignoreChanges", "true") \
-        .trigger(processingTime='10 seconds') \
+        .trigger(once=True) \
         .table("turbine_bronze")
 
 # COMMAND ----------
