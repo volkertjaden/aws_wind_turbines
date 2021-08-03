@@ -1,5 +1,5 @@
 # Databricks notebook source
-from pyspark.sql.functions import rand, input_file_name, from_json, col
+from pyspark.sql.functions import rand, input_file_name, from_json, col, to_json, current_timestamp
 from pyspark.sql.types import *
 
 from pyspark.ml.feature import StringIndexer, StandardScaler, VectorAssembler
@@ -23,11 +23,10 @@ import re
 # COMMAND ----------
 
 current_user = dbutils.notebook.entry_point.getDbutils().notebook().getContext().tags().apply('user')
+dbutils.widgets.text('path',"s3://oetrta/volker/demos")
+dbutils.widgets.text('dbName', 'volker_windturbine')
 dbName = dbutils.widgets.get("dbName")
 path = dbutils.widgets.get("path")
-dbutils.widgets.text("path", path, "path")
-dbutils.widgets.text("dbName", dbName, "dbName")
-print("using path {}".format(path))
 spark.sql("""create database if not exists {} LOCATION '{}/turbine/tables' """.format(dbName, path))
 spark.sql("""USE {}""".format(dbName))
 
@@ -39,6 +38,7 @@ spark.conf.set("spark.sql.streaming.checkpointLocation", path+"/turbine/_checkpo
 
 tables = ["turbine_bronze", "turbine_silver", "turbine_gold", "turbine_power"]
 reset_all = dbutils.widgets.get("reset_all") == "true" #or any([not spark.catalog._jcatalog.tableExists(table) for table in ["turbine_power"]])
+
 if reset_all:
   print("resetting data")
   for table in tables:
@@ -49,16 +49,13 @@ if reset_all:
   dbutils.fs.rm(path+"/turbine/bronze/", True)
   dbutils.fs.rm(path+"/turbine/silver/", True)
   dbutils.fs.rm(path+"/turbine/gold/", True)
-  dbutils.fs.rm(path+"/turbine/kinesis_sample/",True)
     
   spark.read.format("json") \
             .schema("turbine_id bigint, date timestamp, power float, wind_speed float, theoretical_power_curve float, wind_direction float") \
-            .load("s3://oetrta/volker/turbine/power/raw") \
+            .load("s3://oetrta/volker/datasets/turbine/power/raw") \
        .write.format("delta").mode("overwrite").save(path+"/turbine/power/bronze/data")
   
   spark.sql("create table if not exists turbine_power using delta location '"+path+"/turbine/power/bronze/data'")
-  
-  spark.read.parquet('/mnt/oetrta/volker/turbine/incoming-data/').sample(fraction=0.01).write.format('delta').save(path+"/turbine/kinesis_sample/")
 else:
   print("loaded without data reset")
 
@@ -105,7 +102,7 @@ redshift_url = f"jdbc:redshift://{hostname}:{port}/{database}?user={username}&pa
 # COMMAND ----------
 
 if reset_all:
-  status_df = spark.read.parquet('/mnt/oetrta/volker/turbine/status/')
+  status_df = spark.read.parquet('s3://oetrta/volker/datasets/turbine/status/')
   ( status_df.write
   .format( "com.databricks.spark.redshift" ) 
   .option( "url",          redshift_url    )

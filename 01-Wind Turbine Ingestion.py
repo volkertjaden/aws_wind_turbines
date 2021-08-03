@@ -27,13 +27,13 @@
 # COMMAND ----------
 
 dbutils.widgets.text('reset_all_data',"true")
-dbutils.widgets.text('path',"/home/volker.tjaden@databricks.com/turbine/")
-dbutils.widgets.text("dbName", "volker_windturbine")
+dbutils.widgets.text('path',"s3://oetrta/volker/demos")
+dbutils.widgets.text('dbName', 'volker_windturbine')
 
 # COMMAND ----------
 
 # DBTITLE 1,Let's prepare our data first
-# MAGIC %run ./00-setup_power $reset_all=$reset_all_data $dbName=dbName $path=$path
+# MAGIC %run ./00-setup_power $reset_all=$reset_all_data $dbName=$dbName $path=$path
 
 # COMMAND ----------
 
@@ -42,19 +42,13 @@ dbutils.widgets.text("dbName", "volker_windturbine")
 
 # COMMAND ----------
 
-# MAGIC %fs ls /mnt/oetrta/volker/turbine/incoming-data/
+# MAGIC %fs ls s3://oetrta/volker/datasets/turbine/incoming-data/
 
 # COMMAND ----------
 
 # DBTITLE 1,Let us ingest some historical raw data first: (key, json)
 # MAGIC %sql 
-# MAGIC select * from parquet.`/mnt/oetrta/volker/turbine/incoming-data/`;
-
-# COMMAND ----------
-
-# DBTITLE 1,Now, let us switch to our ingest pipeline for historical data
-# MAGIC %md
-# MAGIC ### [Delta Pipeline for batch ingest](https://e2-demo-field-eng.cloud.databricks.com/?o=1444828305810485#joblist/pipelines/4bb477c8-b16a-4c22-a571-9baebb75e8bc)
+# MAGIC select * from parquet.`s3://oetrta/volker/datasets/turbine/incoming-data/`;
 
 # COMMAND ----------
 
@@ -67,14 +61,20 @@ dbutils.widgets.text("dbName", "volker_windturbine")
 bronzeDF = spark.readStream \
                 .format("cloudFiles") \
                 .option("cloudFiles.format", "parquet") \
-                .option("cloudFiles.maxFilesPerTrigger", 1) \
                 .schema("value string, key double") \
-                .load("/mnt/oetrta/volker/turbine/incoming-data/") 
+                .load("s3://oetrta/volker/datasets/turbine/incoming-data/") 
                   
 bronzeDF.writeStream \
         .option("ignoreChanges", "true") \
         .trigger(once=True) \
+        .queryName("batch_write") \
         .table("turbine_bronze")
+
+# COMMAND ----------
+
+# DBTITLE 1,Our raw data is now available in a Delta table, without having small files issues & with great performances
+# MAGIC %sql
+# MAGIC select * from turbine_bronze;
 
 # COMMAND ----------
 
@@ -83,18 +83,7 @@ bronzeDF.writeStream \
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC ### [Notebook with definitions](https://e2-demo-field-eng.cloud.databricks.com/?o=1444828305810485#notebook/2086664449477884/command/2086664449477887)
-# MAGIC ### [Link to Pipeline](https://e2-demo-field-eng.cloud.databricks.com/?o=1444828305810485#joblist/pipelines/ced62127-a0ad-47b4-8965-31ca3d25ca47)
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC Some code to inspect the different parts
-
-# COMMAND ----------
-
-# DBTITLE 1,In addition, we will be pulling Data from Kinesis stream
+# DBTITLE 1,In addition, we will be pulling live data from Kinesis stream
 kinesis_readings = (spark
   .readStream
   .format("kinesis")
@@ -116,14 +105,9 @@ display(kinesis_readings)
 (kinesis_readings
  .select('key','value')
  .writeStream
+ .queryName("kinesis_bronze_write") 
  .table("turbine_bronze")
 )
-
-# COMMAND ----------
-
-# DBTITLE 1,Our raw data is now available in a Delta table, without having small files issues & with great performances
-# MAGIC %sql
-# MAGIC select * from turbine_bronze;
 
 # COMMAND ----------
 
@@ -134,25 +118,83 @@ display(kinesis_readings)
 
 jsonSchema = StructType([StructField(col, DoubleType(), False) for col in ["AN3", "AN4", "AN5", "AN6", "AN7", "AN8", "AN9", "AN10", "SPEED", "TORQUE", "ID"]] + [StructField("TIMESTAMP", TimestampType())])
 
-spark.readStream.table('turbine_bronze') \
+silver_stream = (spark.readStream.table('turbine_bronze') \
      .withColumn("jsonData", from_json(col("value"), jsonSchema)) \
      .select("jsonData.*") \
      .writeStream \
      .option("ignoreChanges", "true") \
      .format("delta") \
-     .trigger(processingTime='10 seconds') \
+     .queryName("silver_write") \
+     .trigger(processingTime='2 seconds') \
      .table("turbine_silver")
+                )
+
+# COMMAND ----------
+
+# DBTITLE 1,First, let us run a static SQL query on Delta Table
+# MAGIC %sql
+# MAGIC select count(*)
+# MAGIC from turbine_silver
 
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC -- let's add some constraints in our table, to ensure or ID can't be negative (need DBR 7.5)
+# MAGIC select *
+# MAGIC from turbine_silver
+# MAGIC limit 10
+
+# COMMAND ----------
+
+# DBTITLE 1,Now let us run some queries on the consolidated Live data set
+live_df = (spark
+           .readStream
+           .table('turbine_silver')
+          )
+
+live_df.createOrReplaceTempView('live_view')
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select ID, count(*)
+# MAGIC from live_view
+# MAGIC group by ID
+# MAGIC order by ID
+
+# COMMAND ----------
+
+from pyspark.sql.functions import current_date, window
+
+(live_df
+ .withWatermark("TIMESTAMP", '1 hours')
+ .where(col('TIMESTAMP').cast("DATE")==current_date())
+ .groupby('ID',window('TIMESTAMP',"10 minutes"))
+ .avg('SPEED').alias('mean_velocity')
+ .writeStream
+ .format('memory')
+ .queryName("avg_speed")
+ .outputMode("complete")
+ .start()
+)
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select ID, window.start, `avg(SPEED)`
+# MAGIC from avg_speed
+# MAGIC where ID in (506, 33)
+
+# COMMAND ----------
+
+# DBTITLE 1,Add data quality constraints
+# MAGIC %sql
 # MAGIC ALTER TABLE turbine_silver ADD CONSTRAINT idGreaterThanZero CHECK (id >= 0);
-# MAGIC -- let's enable the auto-compaction
-# MAGIC alter table turbine_silver set tblproperties ('delta.autoOptimize.autoCompact' = true, 'delta.autoOptimize.optimizeWrite' = true);
-# MAGIC 
-# MAGIC -- Select data
-# MAGIC select * from turbine_silver;
+# MAGIC ALTER TABLE turbine_silver ADD CONSTRAINT speedGreaterThanZero CHECK (speed >= 0);
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC DESCRIBE DETAIL turbine_silver
 
 # COMMAND ----------
 
@@ -215,6 +257,12 @@ turbine_stream.join(status_df, ['id'], 'left') \
 # MAGIC 
 # MAGIC -- Or clone the table (zero copy)
 # MAGIC -- CREATE TABLE turbine_gold_clone [SHALLOW | DEEP] CLONE turbine_gold VERSION AS OF 32
+
+# COMMAND ----------
+
+# DBTITLE 1,Stop active streams
+for s in spark.streams.active:
+  s.stop()
 
 # COMMAND ----------
 
