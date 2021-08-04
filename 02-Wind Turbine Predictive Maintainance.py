@@ -26,11 +26,13 @@
 
 # COMMAND ----------
 
-# MAGIC %run ./00-setup
+dbutils.widgets.text('reset_all_data',"false")
+dbutils.widgets.text('path',"/home/volker.tjaden@databricks.com/turbine/")
+dbutils.widgets.text("dbName", "volker_windturbine")
 
 # COMMAND ----------
 
-dbutils.widgets.text('path',"/home/volker.tjaden@databricks.com/turbine/")
+# MAGIC %run ./00-setup_power $reset_all=$reset_all_data $dbName=dbName $path=$path
 
 # COMMAND ----------
 
@@ -49,7 +51,11 @@ dbutils.widgets.text('path',"/home/volker.tjaden@databricks.com/turbine/")
 
 # COMMAND ----------
 
-df = spark.read.table('gold_ml')
+df = spark.read.table('volker_windturbine.feature_table')
+
+# COMMAND ----------
+
+display(df)
 
 # COMMAND ----------
 
@@ -57,15 +63,10 @@ display(df.groupby('id','status').count())
 
 # COMMAND ----------
 
-# MAGIC %sql 
-# MAGIC select distinct(id) from turbine_silver  where id > 499
-
-# COMMAND ----------
-
 from pyspark.sql.functions import rand
 
-turbine_healthy = spark.read.table("gold_ml").filter("STATUS = 'healthy'").limit(100000)
-turbine_damaged = spark.read.table("gold_ml").filter("STATUS = 'damaged'").limit(100000)
+turbine_healthy = spark.read.table("volker_windturbine.feature_table").filter("STATUS = 'healthy'").limit(100000)
+turbine_damaged = spark.read.table("volker_windturbine.feature_table").filter("STATUS = 'damaged'").limit(100000)
 
 dataset = (turbine_damaged.union(turbine_healthy).orderBy(rand())
           .withColumnRenamed('status','STATUS'))
@@ -238,12 +239,16 @@ print(f"Application status is: {check_status(app_name)}")
 
 # COMMAND ----------
 
+featureCols = ["AN3", "AN4", "AN5", "AN6", "AN7", "AN8", "AN9", "AN10"]
+
 cols = dataset.select(*featureCols).schema.names
 payload = list(dataset.select(*featureCols).sample(fraction=0.01).limit(1).collect()[0].asDict().values())
 
 # COMMAND ----------
 
 # DBTITLE 1,Now, let us test our deployed endpoint
+from pyspark.sql.functions import *
+
 import json
 import boto3
 
