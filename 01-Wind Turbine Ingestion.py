@@ -260,6 +260,11 @@ turbine_stream.join(status_df, ['id'], 'left') \
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC # Let us do some live-scoring on a pre-trained model
+
+# COMMAND ----------
+
 # DBTITLE 1,Stop active streams
 for s in spark.streams.active:
   s.stop()
