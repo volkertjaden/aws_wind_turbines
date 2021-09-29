@@ -93,7 +93,6 @@ kinesis_readings = (spark
   .load()
   .withColumn('value',col("data").cast(StringType()))                
   .withColumn('key',col('partitionKey').cast(DoubleType()))         
-  #.withColumn('json',from_json(col('payload'),jsonSchema))
                    )
 
 # COMMAND ----------
@@ -189,7 +188,6 @@ from pyspark.sql.functions import current_date, window
 # DBTITLE 1,Add data quality constraints
 # MAGIC %sql
 # MAGIC ALTER TABLE turbine_silver ADD CONSTRAINT idGreaterThanZero CHECK (id >= 0);
-# MAGIC ALTER TABLE turbine_silver ADD CONSTRAINT speedGreaterThanZero CHECK (speed >= 0);
 
 # COMMAND ----------
 
@@ -230,7 +228,6 @@ turbine_stream.join(status_df, ['id'], 'left') \
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC 
 # MAGIC -- Select data
 # MAGIC select * from turbine_gold;
 
@@ -238,12 +235,23 @@ turbine_stream.join(status_df, ['id'], 'left') \
 
 # MAGIC %md 
 # MAGIC ## Run DELETE/UPDATE/MERGE with DELTA ! 
-# MAGIC We just realized that something is wrong in the data in June 2020! Let's DELETE all this data from our gold table as we don't want to have wrong value in our dataset
+# MAGIC Lots of things can go wrong with streaming data. So let us delete a chunk of data and travel back in time.
 
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC DELETE FROM turbine_gold where timestamp < '2020-06-30' and timestamp >= '2020-06-01';
+# MAGIC select min(timestamp), max(timestamp) from turbine_gold
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC optimize turbine_gold
+
+# COMMAND ----------
+
+# DBTITLE 1,Suppose we discover an issue with data timestamped < 2020-06-01
+# MAGIC %sql
+# MAGIC DELETE FROM turbine_gold where timestamp < '2020-06-01'
 
 # COMMAND ----------
 
@@ -260,8 +268,53 @@ turbine_stream.join(status_df, ['id'], 'left') \
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC select min(timestamp), max(timestamp) from turbine_gold
+
+# COMMAND ----------
+
+# DBTITLE 1,We can travel back in time if the delete was accidental
+# MAGIC %sql
+# MAGIC select min(timestamp), max(timestamp) from turbine_gold TIMESTAMP AS OF '2021-08-04T11:07:00.000+0000'
+
+# COMMAND ----------
+
+# DBTITLE 1,... and restore previous version
+# MAGIC %sql
+# MAGIC MERGE INTO turbine_gold
+# MAGIC USING turbine_gold VERSION AS OF 31 AS restore_version
+# MAGIC ON turbine_gold.id=restore_version.id AND turbine_gold.timestamp=restore_version.timestamp
+# MAGIC WHEN NOT MATCHED THEN INSERT *
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select min(timestamp), max(timestamp) from turbine_gold
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC # Let us do some live-scoring on a pre-trained model
+
+# COMMAND ----------
+
+model_from_registry = mlflow.spark.load_model('models:/turbine_gbt/production')
+
+# COMMAND ----------
+
+gold_stream = (spark
+              .readStream
+              .table('turbine_gold')
+              .where(col('TIMESTAMP').cast("DATE")==current_date())
+              )
+
+# COMMAND ----------
+
+display(model_from_registry
+               .transform(gold_stream)
+               .withWatermark("TIMESTAMP", '1 hours')
+               .select("ID", "TIMESTAMP" ,"prediction")
+              )
 
 # COMMAND ----------
 
